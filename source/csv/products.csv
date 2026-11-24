@@ -1,0 +1,42 @@
+product_code,product_name,category,unit_price,is_active,updated_at
+BK-0001,Type A Uniform Polo (Male),Uniform,650.00,Y,2025-07-28 08:00:00
+BK-0002,Type A Uniform Blouse (Female),Uniform,620.00,Y,2025-07-28 08:00:00
+BK-0003,PE Shirt,Uniform,350.00,Y,2025-07-28 08:00:00
+BK-0004,PE Jogging Pants,Uniform,480.00,Y,2025-07-28 08:00:00
+BK-0005,University Lanyard,Accessories,120.00,Y,2025-07-28 08:00:00
+BK-0006,ID Holder,Accessories,60.00,Y,2025-07-28 08:00:00
+BK-0007,"Spiral Notebook, 80 leaves",School Supplies,55.00,Y,2025-07-28 08:00:00
+BK-0008,Yellow Pad,School Supplies,45.00,Y,2025-07-28 08:00:00
+BK-0009,"Ballpen, Black",School Supplies,15.00,Y,2025-07-28 08:00:00
+BK-0010,"Ballpen, Blue",School Supplies,15.00,Y,2025-07-28 08:00:00
+BK-0011,Highlighter,School Supplies,35.00,Y,2025-07-28 08:00:00
+BK-0012,Scientific Calculator,School Supplies,"PHP 1,250.00",Y,2025-07-28 08:00:00
+BK-0013,Bluebook (exam booklet),School Supplies,12.00,Y,2025-07-28 08:00:00
+BK-0014,Database Systems Textbook,Books,1450.00,Y,2025-07-28 08:00:00
+BK-0015,Calculus Textbook,Books,1380.00,Y,2025-07-28 08:00:00
+BK-0016,Introduction to Programming Textbook,Books,1150.00,Y,2025-07-28 08:00:00
+BK-0017,Philippine History Reader,Books,520.00,Y,2025-07-28 08:00:00
+BK-0018,Lab Gown,Uniform,450.00,Y,2025-07-28 08:00:00
+ BK-0019,Tote Bag,Accessories,180.00,Y,2025-07-28 08:00:00
+BK-0020,Umbrella,,250.00,Y,2025-07-28 08:00:00
+CN-0001,"Rice Meal, Chicken Adobo",Meals,85.00,Y,2025-07-28 08:00:00
+CN-0002,"Rice Meal, Pork Sinigang",Meals,90.00,Y,2025-07-28 08:00:00
+CN-0003,"Rice Meal, Fish Fillet",Meals,85.00,Y,2025-07-28 08:00:00
+CN-0004,Pancit Canton,Meals,60.00,Y,2025-07-28 08:00:00
+CN-0005,Spaghetti,Meals,65.00,Y,2025-07-28 08:00:00
+CN-0006,Chicken Sandwich,Snacks,55.00,Y,2025-07-28 08:00:00
+CN-0007,Siomai (4 pcs),Snacks,40.00,Y,2025-07-28 08:00:00
+CN-0008,Turon,Snacks,20.00,Y,2025-07-28 08:00:00
+CN-0009,Banana Cue,Snacks,20.00,Y,2025-07-28 08:00:00
+CN-0010,Lumpiang Shanghai (5 pcs),Snacks,PHP 45.00,Y,2025-07-28 08:00:00
+CN-0011,Iced Tea,Drinks,30.00,Y,2025-07-28 08:00:00
+CN-0012,"Bottled Water, 500 ml",Drinks,20.00,Y,2025-07-28 08:00:00
+CN-0013,Brewed Coffee,Drinks,35.00,Y,2025-07-28 08:00:00
+CN-0014,Fresh Buko Juice,Drinks,40.00,Y,2025-07-28 08:00:00
+CN-0015,Soft Drink in Can,Drinks,35.00,Y,2025-07-28 08:00:00
+CN-0016,Chocolate Milk,Drinks,38.00,Y,2025-07-28 08:00:00
+CN-0017,Extra Rice,Meals,15.00,Y,2025-07-28 08:00:00
+CN-0018,Fruit Cup,,45.00,Y,2025-07-28 08:00:00
+CN-0019,Halo-Halo,Snacks,70.00,Y,2025-07-28 08:00:00
+CN-0020,Champorado,Meals,50.00,Y,2025-07-28 08:00:00
+cn-0007,Siomai (4 pcs),Snacks,40.00,Y,2025-07-28 08:00:00

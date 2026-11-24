@@ -1,0 +1,5 @@
+branch_code,branch_name,branch_type,building,opened_on
+BKS-MAIN,"Campus Bookstore, Main Building",BOOKSTORE,Main Building,2019-06-03
+BKS-QPAV,"Campus Bookstore Annex, Quadricentennial Pavilion",BOOKSTORE,Quadricentennial Pavilion,2022-08-08
+CNT-CARP,"Campus Canteen, Multi-Deck Carpark",CANTEEN,Multi-Deck Carpark,2018-06-04
+CNT-TYK,"Campus Canteen, Tan Yan Kee Student Center",CANTEEN,Tan Yan Kee Student Center,2020-01-13

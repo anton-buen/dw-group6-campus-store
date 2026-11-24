@@ -1,0 +1,9 @@
+*.dump
+*.backup
+*.parquet
+.env
+__pycache__/
+target/
+dbt_packages/
+logs/
+.DS_Store

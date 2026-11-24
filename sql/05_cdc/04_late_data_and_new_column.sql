@@ -1,0 +1,11 @@
+-- SESSION 2, task 3: Late and changed data                     Lead: ETL Engineer
+-- Run source/05_late_sales_and_new_column_may19.sql.
+--   a) src.sales has a NEW COLUMN. Your staging load must not break, and old rows must stay valid.
+--      Decide where the new column goes in the star schema and record it in your ADR.
+--   b) Some sales arrive LATE: they were sold days ago, before the price change.
+--      Check which dim_product row they point to.
+--
+-- Evidence: the new column in staging and in the mart, and the late sales joined to
+-- dim_product showing the price that was true on the day of the sale.
+
+-- TODO

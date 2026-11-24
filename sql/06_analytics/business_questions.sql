@@ -1,0 +1,16 @@
+-- SESSION 2, task 6: Analytical SQL                            Lead: Query Analyst
+-- Answer the business questions in docs/01_business_questions.md.
+-- Use ROLLUP or CUBE where a question asks for subtotals, and window functions where it asks
+-- for a rank, a running total, a moving average or a change from the previous period.
+-- Read net sales from your one governed metric (sql/03_marts/04_metric_net_sales.sql).
+-- For every ROLLUP / CUBE answer, add a check that the subtotals add up to the grand total.
+--
+-- Performance Tuner: EXPLAIN (ANALYZE, BUFFERS) for one of these queries, before and after
+-- one index or summary table. Say what changed in the plan.
+
+-- Q1 TODO
+-- Q2 TODO
+-- Q3 TODO
+-- Q4 TODO
+-- Q5 TODO
+-- Q6 TODO

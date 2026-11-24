@@ -1,0 +1,14 @@
+-- SESSION 1, task 6: Data-quality tests                        Lead: Data Steward
+-- Write at least one test for each kind:
+--   completeness  (a value that must be there is there)
+--   validity      (a value has the right type, format or range)
+--   uniqueness    (the grain holds: no duplicate receipt line)
+--   consistency   (values agree with each other, and every key finds its dimension row)
+--   freshness     (see 03_freshness_alert.sql)
+-- A test returns the failing rows. Zero rows = pass.
+-- Failing source rows go to a reject table in schema rej, with the reason and the time.
+-- Save each test run (test name, time, rows failed, pass/fail) in schema audit.
+--
+-- Evidence: the test results table, and the reject table grouped by reason.
+
+-- TODO

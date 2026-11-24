@@ -1,0 +1,12 @@
+-- SESSION 2, task 1b: CDC with a change log                    Lead: ETL Engineer
+-- Run source/03_change_log_may08_to_14.sql. It creates src.sales_change_log.
+-- These changes are NOT in src.sales. Apply the log to your warehouse:
+--   I = insert,  U = update (the row holds the full new values),  D = delete (key only)
+-- Think about: the order of events (lsn), a row changed more than once, an event that is
+-- delivered twice, and what a delete should do to your fact table and to later reruns.
+-- Save the last lsn you applied.
+--
+-- Evidence: events read, events applied by type, last lsn, one deleted row shown gone,
+-- and proof that applying the same log a second time changes nothing.
+
+-- TODO

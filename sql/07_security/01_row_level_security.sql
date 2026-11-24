@@ -1,0 +1,12 @@
+-- SESSION 3, task 1: Row-level security                        Lead: Data Steward
+-- Make a branch manager role that can read the mart but sees ONLY its own branch's sales.
+-- Do it in PostgreSQL (CREATE ROLE, GRANT, ENABLE ROW LEVEL SECURITY, CREATE POLICY).
+-- Make it work for any branch without writing a new policy for each one.
+-- Test it by connecting AS that role (psql -U ..., or SET ROLE). A table owner or superuser
+-- skips the policy, so a test as yourself proves nothing.
+--
+-- Evidence: the same count query run as the manager role and as the owner, with different results.
+-- Optional, not graded here but part of Module 7: hide customer id numbers from the manager
+-- role (column masking), and log who reads the fact table (audit logging).
+
+-- TODO
