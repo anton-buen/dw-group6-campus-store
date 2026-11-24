@@ -234,3 +234,30 @@ JOIN mart.dim_product p      ON v.product_key  = p.product_key
 JOIN changed_products cp     ON p.product_code = cp.product_code
 GROUP BY p.product_code, p.product_name, p.is_current, p.unit_price, p.valid_from, p.valid_to
 ORDER BY p.product_code, p.valid_from;
+
+-- EVIDENCE 2.12: Query Plan Optimization via Materialized Summary Table
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT b.branch_type, b.branch_name, t.term_code, SUM(v.net_sales) AS net_sales
+FROM mart.v_net_sales v
+JOIN mart.dim_branch b ON v.branch_key = b.branch_key
+JOIN shared.dim_term t ON v.term_key   = t.term_key
+GROUP BY ROLLUP (b.branch_type, b.branch_name, t.term_code);
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS mart.mv_net_sales_branch_term AS
+SELECT
+    b.branch_type,
+    b.branch_name,
+    t.term_code,
+    SUM(v.net_sales) AS net_sales
+FROM mart.v_net_sales v
+JOIN mart.dim_branch b ON v.branch_key = b.branch_key
+JOIN shared.dim_term t ON v.term_key   = t.term_key
+GROUP BY b.branch_type, b.branch_name, t.term_code;
+
+REFRESH MATERIALIZED VIEW mart.mv_net_sales_branch_term;
+ANALYZE mart.mv_net_sales_branch_term;
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT branch_type, branch_name, term_code, SUM(net_sales) AS net_sales
+FROM mart.mv_net_sales_branch_term
+GROUP BY ROLLUP (branch_type, branch_name, term_code);
