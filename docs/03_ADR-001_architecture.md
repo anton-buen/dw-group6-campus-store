@@ -45,3 +45,27 @@ Add your own records below this one (ADR-002, ADR-003, …), one short paragraph
 - Where the new source column goes in the star schema.
 - Which rule you use when two source rows disagree about the same student, course or receipt line.
 - Every change you made to the given tables.
+
+---
+
+## Group Architecture Decision Records
+
+### ADR-002: Plain PostgreSQL SQL Scripts Over dbt
+**Status:** Accepted. **Decided by:** Data Architect & ETL Engineer.
+We chose plain, idempotent PostgreSQL SQL scripts (`\set ON_ERROR_STOP on`, explicit transactions) over dbt so every team member can run the entire warehouse pipeline with zero Python/virtual-environment setup overhead while directly using native PostgreSQL features (`ON CONFLICT ... DO UPDATE`, procedural LSN loops, and row-level security policies).
+
+### ADR-003: Handling Change-Log Deletes via Physical Delete + Persistent Tombstone Table
+**Status:** Accepted. **Decided by:** Data Architect & ETL Engineer.
+When a `D` (delete) event arrives in `src.sales_change_log`, we delete the matching `(receipt_no, line_no)` row from `mart.fct_sales` so analytical queries and governed metrics immediately reflect accurate net sales without requiring `WHERE NOT is_deleted` filters everywhere. Simultaneously, we record `(receipt_no, line_no, deleted_lsn)` in `audit.deleted_sales_keys` so full reruns or backfills from `src.sales` never resurrect deleted rows unless a newer LSN re-inserts them.
+
+### ADR-004: Placement of New `order_channel` Column in the Star Schema (Evidence 2.5)
+**Status:** Accepted. **Decided by:** Data Architect.
+When the May 18, 2026 POS upgrade added `order_channel` (`COUNTER`, `PREORDER_APP`) to `src.sales`, different lines within the same receipt carried different channels (e.g., `BKS-MAIN-20260518-0001` line 1 = `PREORDER_APP`, line 2 = `COUNTER`). Because `order_channel` is a low-cardinality transactional attribute at the receipt-line grain with no independent hierarchy or attributes of its own, we placed it directly on `mart.fct_sales` as a degenerate attribute (`order_channel text NOT NULL DEFAULT 'UNKNOWN'`) alongside `txn_type` and `payment_method`. Pre-May 18 rows retain `'UNKNOWN'` so historical rows remain 100% valid with no `NULL`s in group-by reports.
+
+### ADR-005: Tie-Breaking Rule for Conflicting Duplicate Source Rows
+**Status:** Accepted. **Decided by:** Data Architect & Data Steward.
+When duplicate rows share the same natural key (`receipt_no + line_no` in sales, `product_code` in products, `customer_id` in customers), we rank candidates deterministically by `updated_at DESC` (`registered_on DESC` for customers, completeness score for enrollment students) with `ctid DESC` as a final deterministic tie-breaker, keeping `rn = 1` and logging superseded sales rows in `int.int_sales_dedup_removed` for full audit reconciliation.
+
+### ADR-006: Schema Additions Beyond Starter DDL
+**Status:** Accepted. **Decided by:** Data Architect.
+We added `order_channel text NOT NULL DEFAULT 'UNKNOWN'` to `mart.fct_sales` (and `text` to `stg.stg_sales` and `rej.rej_sales`), created `audit.etl_watermark` and `audit.deleted_sales_keys` to guarantee idempotent watermark/change-log/rerun loads, and created `int.int_sales_dedup_removed` so `02_audit_totals.sql` reconciles every source row to zero unexplained difference.
