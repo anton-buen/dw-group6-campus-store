@@ -10,6 +10,21 @@
 
 BEGIN;
 
+-- 0. Ensure schema evolution & tombstone tables exist safely across any run order
+ALTER TABLE src.sales       ADD COLUMN IF NOT EXISTS order_channel text;
+ALTER TABLE stg.stg_sales   ADD COLUMN IF NOT EXISTS order_channel text;
+ALTER TABLE rej.rej_sales   ADD COLUMN IF NOT EXISTS order_channel text;
+ALTER TABLE mart.fct_sales  ADD COLUMN IF NOT EXISTS order_channel text NOT NULL DEFAULT 'UNKNOWN';
+
+CREATE TABLE IF NOT EXISTS audit.deleted_sales_keys (
+    receipt_no      text NOT NULL,
+    line_no         integer NOT NULL,
+    deleted_lsn     bigint NOT NULL,
+    deleted_at      timestamp,
+    recorded_at     timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (receipt_no, line_no)
+);
+
 -- 1. Create and seed watermark table from current mart.fct_sales max updated_at
 CREATE TABLE IF NOT EXISTS audit.etl_watermark (
     pipeline_name     text PRIMARY KEY,
@@ -22,7 +37,9 @@ SELECT 'fct_sales', MAX(source_updated_at)
 FROM mart.fct_sales
 ON CONFLICT (pipeline_name) DO NOTHING;
 
--- Capture watermark BEFORE load
+-- Capture watermark BEFORE load (drop temp tables first so \i can run multiple times per session)
+DROP TABLE IF EXISTS tmp_wm_before, tmp_delta_ranked, tmp_delta_eval, tmp_corrected_before, tmp_upsert_stats;
+
 CREATE TEMP TABLE tmp_wm_before AS
 SELECT last_updated_at AS watermark_before
 FROM audit.etl_watermark
@@ -40,45 +57,52 @@ FROM src.sales s
 CROSS JOIN tmp_wm_before w
 WHERE s.updated_at::timestamp > w.watermark_before;
 
--- Log removed duplicates from this delta batch so audit totals reconcile to 0
+-- Log removed duplicates from this delta batch (idempotent check prevents double-logging)
 INSERT INTO int.int_sales_dedup_removed (
     receipt_no, line_no, sold_at, branch_code, product_code, customer_id,
     txn_type, quantity, unit_price, discount, line_total, payment_method, updated_at
 )
 SELECT
-    receipt_no, line_no, sold_at, branch_code, product_code, customer_id,
-    txn_type, quantity, unit_price, discount, line_total, payment_method, updated_at
-FROM tmp_delta_ranked
-WHERE rn > 1;
+    r.receipt_no, r.line_no, r.sold_at, r.branch_code, r.product_code, r.customer_id,
+    r.txn_type, r.quantity, r.unit_price, r.discount, r.line_total, r.payment_method, r.updated_at
+FROM tmp_delta_ranked r
+WHERE r.rn > 1
+  AND NOT EXISTS (
+      SELECT 1 FROM int.int_sales_dedup_removed d
+      WHERE TRIM(d.receipt_no) = TRIM(r.receipt_no)
+        AND TRIM(d.line_no)    = TRIM(r.line_no)
+        AND TRIM(d.updated_at) = TRIM(r.updated_at)
+  );
 
 -- 3. Parse and evaluate deduplicated delta rows against Session 1 quality rules
 CREATE TEMP TABLE tmp_delta_eval AS
 WITH parsed AS (
     SELECT
-        s.receipt_no                                                 AS raw_receipt_no,
-        s.line_no                                                    AS raw_line_no,
-        s.sold_at                                                    AS raw_sold_at,
-        s.branch_code                                                AS raw_branch_code,
-        s.product_code                                               AS raw_product_code,
-        s.customer_id                                                AS raw_customer_id,
-        s.txn_type                                                   AS raw_txn_type,
-        s.quantity                                                   AS raw_quantity,
-        s.unit_price                                                 AS raw_unit_price,
-        s.discount                                                   AS raw_discount,
-        s.line_total                                                 AS raw_line_total,
-        s.payment_method                                             AS raw_payment_method,
-        s.updated_at                                                 AS raw_updated_at,
+        s.receipt_no                                                  AS raw_receipt_no,
+        s.line_no                                                     AS raw_line_no,
+        s.sold_at                                                     AS raw_sold_at,
+        s.branch_code                                                 AS raw_branch_code,
+        s.product_code                                                AS raw_product_code,
+        s.customer_id                                                 AS raw_customer_id,
+        s.txn_type                                                    AS raw_txn_type,
+        s.quantity                                                    AS raw_quantity,
+        s.unit_price                                                  AS raw_unit_price,
+        s.discount                                                    AS raw_discount,
+        s.line_total                                                  AS raw_line_total,
+        s.payment_method                                              AS raw_payment_method,
+        s.updated_at                                                  AS raw_updated_at,
+        s.order_channel                                               AS raw_order_channel,
 
-        TRIM(s.receipt_no)                                           AS receipt_no,
+        TRIM(s.receipt_no)                                            AS receipt_no,
         CASE WHEN TRIM(s.line_no) ~ '^[1-9][0-9]*$'
-             THEN TRIM(s.line_no)::integer END                       AS line_no,
-        int.try_parse_timestamp(s.sold_at)                           AS sold_at,
-        UPPER(TRIM(s.branch_code))                                   AS branch_code,
-        UPPER(TRIM(s.product_code))                                  AS product_code,
-        NULLIF(UPPER(TRIM(s.customer_id)), '')                       AS customer_id,
-        UPPER(TRIM(s.txn_type))                                      AS txn_type,
+             THEN TRIM(s.line_no)::integer END                        AS line_no,
+        int.try_parse_timestamp(s.sold_at)                            AS sold_at,
+        UPPER(TRIM(s.branch_code))                                    AS branch_code,
+        UPPER(TRIM(s.product_code))                                   AS product_code,
+        NULLIF(UPPER(TRIM(s.customer_id)), '')                        AS customer_id,
+        UPPER(TRIM(s.txn_type))                                       AS txn_type,
         CASE WHEN TRIM(s.quantity) ~ '^[1-9][0-9]*$'
-             THEN TRIM(s.quantity)::integer END                      AS quantity,
+             THEN TRIM(s.quantity)::integer END                       AS quantity,
         CASE WHEN REPLACE(REPLACE(REPLACE(TRIM(s.unit_price), 'PHP', ''), ',', ''), ' ', '') ~ '^[0-9]+(\.[0-9]+)?$'
              THEN REPLACE(REPLACE(REPLACE(TRIM(s.unit_price), 'PHP', ''), ',', ''), ' ', '')::numeric(10,2) END AS unit_price,
         CASE WHEN NULLIF(TRIM(s.discount), '') IS NULL THEN 0.00
@@ -86,8 +110,9 @@ WITH parsed AS (
              THEN REPLACE(REPLACE(REPLACE(TRIM(s.discount), 'PHP', ''), ',', ''), ' ', '')::numeric(10,2) END AS discount_amount,
         CASE WHEN REPLACE(REPLACE(REPLACE(TRIM(s.line_total), 'PHP', ''), ',', ''), ' ', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
              THEN REPLACE(REPLACE(REPLACE(TRIM(s.line_total), 'PHP', ''), ',', ''), ' ', '')::numeric(12,2) END AS line_amount,
-        UPPER(TRIM(s.payment_method))                                AS payment_method,
-        s.updated_at::timestamp                                      AS source_updated_at
+        UPPER(TRIM(s.payment_method))                                 AS payment_method,
+        COALESCE(NULLIF(UPPER(TRIM(s.order_channel)), ''), 'UNKNOWN') AS order_channel,
+        s.updated_at::timestamp                                       AS source_updated_at
     FROM tmp_delta_ranked s
     WHERE s.rn = 1
 )
@@ -110,18 +135,24 @@ LEFT JOIN mart.dim_product pr ON p.product_code = pr.product_code
                              AND p.sold_at >= pr.valid_from
                              AND p.sold_at <  pr.valid_to;
 
--- 4. Route rejected delta rows to rej.rej_sales
+-- 4. Route rejected delta rows to rej.rej_sales (idempotent guard)
 INSERT INTO rej.rej_sales (
     receipt_no, line_no, sold_at, branch_code, product_code, customer_id,
     txn_type, quantity, unit_price, discount, line_total, payment_method,
-    updated_at, batch_id, reject_reason
+    updated_at, order_channel, batch_id, reject_reason
 )
 SELECT
-    raw_receipt_no, raw_line_no, raw_sold_at, raw_branch_code, raw_product_code, raw_customer_id,
-    raw_txn_type, raw_quantity, raw_unit_price, raw_discount, raw_line_total, raw_payment_method,
-    raw_updated_at, 'S2_WATERMARK_MAY07', reject_reason
-FROM tmp_delta_eval
-WHERE reject_reason IS NOT NULL;
+    e.raw_receipt_no, e.raw_line_no, e.raw_sold_at, e.raw_branch_code, e.raw_product_code, e.raw_customer_id,
+    e.raw_txn_type, e.raw_quantity, e.raw_unit_price, e.raw_discount, e.raw_line_total, e.raw_payment_method,
+    e.raw_updated_at, e.raw_order_channel, 'S2_WATERMARK_CDC', e.reject_reason
+FROM tmp_delta_eval e
+WHERE e.reject_reason IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM rej.rej_sales r
+      WHERE TRIM(r.receipt_no) = TRIM(e.raw_receipt_no)
+        AND TRIM(r.line_no)    = TRIM(e.raw_line_no)
+        AND TRIM(r.updated_at) = TRIM(e.raw_updated_at)
+  );
 
 -- 5. Snapshot existing rows in mart.fct_sales that are about to be updated (corrected rows)
 CREATE TEMP TABLE tmp_corrected_before AS
@@ -136,15 +167,21 @@ FROM mart.fct_sales f
 JOIN tmp_delta_eval d
   ON f.receipt_no = d.receipt_no
  AND f.line_no    = d.line_no
-WHERE d.reject_reason IS NULL;
+WHERE d.reject_reason IS NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM audit.deleted_sales_keys del
+      WHERE del.receipt_no = d.receipt_no
+        AND del.line_no    = d.line_no
+        AND (del.deleted_at IS NULL OR d.source_updated_at <= del.deleted_at)
+  );
 
--- 6. Upsert clean delta rows into mart.fct_sales and track INSERT vs UPDATE
+-- 6. Upsert clean, non-tombstoned delta rows into mart.fct_sales
 CREATE TEMP TABLE tmp_upsert_stats AS
 WITH upserted AS (
     INSERT INTO mart.fct_sales (
         receipt_no, line_no, date_key, term_key, branch_key, product_key, customer_key,
-        txn_type, payment_method, quantity, unit_price, discount_amount, line_amount,
-        sold_at, source_updated_at
+        txn_type, payment_method, order_channel, quantity, unit_price, discount_amount,
+        line_amount, sold_at, source_updated_at
     )
     SELECT
         s.receipt_no,
@@ -156,6 +193,7 @@ WITH upserted AS (
         COALESCE(c.customer_key, -1) AS customer_key,
         s.txn_type,
         s.payment_method,
+        s.order_channel,
         s.quantity,
         s.unit_price,
         s.discount_amount,
@@ -170,6 +208,12 @@ WITH upserted AS (
                             AND s.sold_at <  p.valid_to
     LEFT JOIN mart.dim_customer c ON s.customer_id = c.customer_id
     WHERE s.reject_reason IS NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM audit.deleted_sales_keys del
+          WHERE del.receipt_no = s.receipt_no
+            AND del.line_no    = s.line_no
+            AND (del.deleted_at IS NULL OR s.source_updated_at <= del.deleted_at)
+      )
     ON CONFLICT (receipt_no, line_no) DO UPDATE
     SET date_key          = EXCLUDED.date_key,
         term_key          = EXCLUDED.term_key,
@@ -178,6 +222,7 @@ WITH upserted AS (
         customer_key      = EXCLUDED.customer_key,
         txn_type          = EXCLUDED.txn_type,
         payment_method    = EXCLUDED.payment_method,
+        order_channel     = EXCLUDED.order_channel,
         quantity          = EXCLUDED.quantity,
         unit_price        = EXCLUDED.unit_price,
         discount_amount   = EXCLUDED.discount_amount,
@@ -195,16 +240,21 @@ SELECT
     (SELECT COUNT(*) FROM tmp_delta_ranked WHERE rn > 1)                  AS dupes_removed
 FROM upserted;
 
--- 7. Advance the watermark
+-- 7. Advance watermark in BOTH audit tables so staging & CDC stay synchronized
 UPDATE audit.etl_watermark
 SET last_updated_at = (SELECT MAX(source_updated_at) FROM tmp_delta_eval),
     updated_on      = now()
 WHERE pipeline_name = 'fct_sales'
   AND EXISTS (SELECT 1 FROM tmp_delta_eval);
 
+UPDATE audit.watermarks
+SET last_watermark = (SELECT last_updated_at FROM audit.etl_watermark WHERE pipeline_name = 'fct_sales'),
+    updated_at     = now()
+WHERE stream_name = 'sales';
+
 COMMIT;
 
--- Evidence 2.1a: Watermark before/after + rows picked up, inserted, updated, rejected, dupes
+-- Watermark summary + corrected rows
 SELECT
     b.watermark_before,
     w.last_updated_at AS watermark_after,
@@ -218,7 +268,6 @@ CROSS JOIN audit.etl_watermark w
 CROSS JOIN tmp_upsert_stats s
 WHERE w.pipeline_name = 'fct_sales';
 
--- Evidence 2.1b: Corrected rows shown BEFORE and AFTER
 SELECT
     cb.receipt_no,
     cb.line_no,
